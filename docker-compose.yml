@@ -1,0 +1,91 @@
+version: "3.7"
+services:
+    zookeeper:
+        image: wurstmeister/zookeeper
+        ports:
+            - 2181:2181
+        networks:
+            - travellist
+    kafka:
+        image: wurstmeister/kafka
+        ports:
+            - 9092:9092
+        environment:
+            KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+            KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://localhost:9092
+            KAFKA_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka:19092,LISTENER_DOCKER_EXTERNAL://localhost:9092
+            KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_EXTERNAL
+            KAFKA_ADVERTISED_HOST_NAME: kafka
+            KAFKA_CREATE_TOPICS: "test:1:1"
+            KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+        networks:
+            - travellist
+        depends_on:
+            - zookeeper
+    app:
+        build:
+            args:
+                user: sammy
+                uid: 1000
+            context: ./
+            dockerfile: Dockerfile
+        image: travellist
+        container_name: travellist-app
+        restart: unless-stopped
+        working_dir: /var/www/
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+            XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+            XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
+            IGNITION_LOCAL_SITES_PATH: '${PWD}'
+            COMPOSER_MEMORY_LIMIT: -1
+            DATABASE: '${DB_DATABASE}'
+            USERNAME: '${DB_USERNAME}'
+            PASSWORD: '${DB_PASSWORD}'
+            XDEBUG_SESSION: docker-server
+        volumes:
+            - ./:/var/www
+        networks:
+            - travellist
+        depends_on:
+            - postgres
+            - kafka
+
+    postgres:
+        image: postgres:15
+        container_name: postgres
+        restart: always
+        environment:
+            POSTGRES_DB: '${DB_DATABASE}'
+            POSTGRES_USER: '${DB_USERNAME}'
+            POSTGRES_PASSWORD: '${DB_PASSWORD}'
+        volumes:
+            - 'sail-pgsql:/var/lib/postgresql/data'
+            - './vendor/laravel/sail/database/pgsql/create-testing-database.sql:/docker-entrypoint-initdb.d/10-create-testing-database.sql'
+        ports:
+            - '0.0.0.0:15432:5432' # Port 15433 for connecting from localhost using, for example, data-grip
+        networks:
+            - travellist
+
+    nginx:
+        image: nginx:alpine
+        container_name: travellist-nginx
+        restart: unless-stopped
+        ports:
+            - 8000:80
+        volumes:
+            - ./:/var/www
+            - ./docker-compose/nginx:/etc/nginx/conf.d/
+        networks:
+            - travellist
+
+networks:
+    travellist:
+        driver: bridge
+volumes:
+    sail-pgsql:
+        driver: local
+
