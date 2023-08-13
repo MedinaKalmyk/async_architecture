@@ -130,7 +130,7 @@ class AuthController extends Controller
         $conf = new Conf();;
         $conf->set("bootstrap.servers", 'kafka:19092');
         $conf->set('metadata.broker.list', 'kafka:19092');
-        $conf->set('group.id', 'group_1');
+       // $conf->set('group.id', 'mygroup');
 
 
 
@@ -161,7 +161,8 @@ class AuthController extends Controller
 
 
 
-        TaskCreated::dispatch();
+      TaskCreated::dispatch();
+
 
         return response()->json([
             'status' => 'success',
