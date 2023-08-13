@@ -76,17 +76,6 @@ class AuthController extends Controller
             'api_token' => Str::random(80),
         ]);
 
-
-//        $producer = Kafka::publishOn('broker', 'topic')
-//            ->withConfigOptions(['key' => 'value'])
-//            ->withKafkaKey('your-kafka-key')
-//            ->withKafkaKey('kafka-key')
-//            ->withHeaders(['header-key' => 'header-value']);
-//
-//
-//        $consumer = Kafka::createConsumer([], null, 'topic')->subscribe('broker');
-
-
         return response()->json([
             'status' => 'success',
             'message' => 'User created successfully',
@@ -141,13 +130,17 @@ class AuthController extends Controller
         $conf = new Conf();;
         $conf->set("bootstrap.servers", 'kafka:19092');
         $conf->set('metadata.broker.list', 'kafka:19092');
+        $conf->set('group.id', 'group_1');
+
 
 
         $producer = new Producer($conf);
 
         $tc = new TopicConf();
 
+
         $topic = $producer->newTopic("TaskCreated");
+
 
         $data = [
             'name' => $request->name,
@@ -159,13 +152,16 @@ class AuthController extends Controller
 
         $json = json_encode($data);
 
-            $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
+        $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
 
         $producer->flush(200);
 
+
         echo "Message published\n";
 
-        TaskCreated::dispatchSync();
+
+
+        TaskCreated::dispatch();
 
         return response()->json([
             'status' => 'success',
