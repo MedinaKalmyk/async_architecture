@@ -55,14 +55,18 @@ class TaskCreated implements ShouldQueue
         $conf->set('auto.commit.interval.ms', 9999999);
         $conf->set('auto.offset.reset', 'smallest');
         $conf->set("auto.commit.interval.ms", 1e3);
+        $conf->set('enable.auto.commit', 'false');
 
         $consumer = new KafkaConsumer($conf);
         $consumer->subscribe(['TaskCreated']);
+        $topic = $consumer->newTopic("TaskCreated");
 
 
         while (true) {
-            $message = $consumer->consume(1000);
+            $message = $consumer->consume(10000);
+           // dd($message);
             switch($message->err) {
+
                 case RD_KAFKA_RESP_ERR_NO_ERROR:
                 $json = json_decode($message->payload);
                 DB::table('task')
@@ -72,6 +76,8 @@ class TaskCreated implements ShouldQueue
                     'price' => $json->price,
                     'userId' => $json->userId,
                 ]);
+                $topic->offsetStore(0, $message->offset);
+              //  dd($topic);
                 break;
                 case RD_KAFKA_RESP_ERR__PARTITION_EOF:
                     // Не ошибка, просто достигнут конец очереди
