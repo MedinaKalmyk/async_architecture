@@ -22,6 +22,7 @@ class KafkaQueue extends Queue implements QueueConstact{
 
         $topic = $this->produser->newTopic($queue);
         $topic->produce(RD_KAFKA_PARTITION_UA, 0, serialize($job));
+
         $this->produser->flush(5000);
     }
 
