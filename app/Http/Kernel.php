@@ -3,6 +3,10 @@
 namespace App\Http;
 
 use App\Http\Middleware\EnsureTokenIsValid;
+use App\Jobs\Accounting;
+use App\Jobs\TaskCreated;
+use App\Jobs\TaskCreated_Version1;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 class Kernel extends HttpKernel
@@ -69,4 +73,9 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'test' => EnsureTokenIsValid::class
     ];
+
+    protected function schedule(Schedule $schedule)
+    {
+        $schedule->job(new Accounting())->everyMinute();
+    }
 }
