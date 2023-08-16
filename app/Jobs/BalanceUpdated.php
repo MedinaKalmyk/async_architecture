@@ -17,7 +17,7 @@ use RdKafka\KafkaConsumer;
 use RdKafka\TopicConf;
 use Symfony\Component\HttpKernel\Log\Logger;
 
-class TaskCreated implements ShouldQueue
+class BalanceUpdated implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -31,22 +31,20 @@ class TaskCreated implements ShouldQueue
     public function handle() {
 
         $conf = new Conf();
-        $conf->set('group.id', 'mygroup');
+        $conf->set('group.id', 'mygroup1');
         $conf->set("bootstrap.servers", 'kafka:19092');
         $conf->set('metadata.broker.list', 'kafka:19092');
-        $conf->set('enable.partition.eof', 'true');
-        $conf->set('auto.offset.reset', 'earliest');
-        $conf->set('log_level', (string) LOG_DEBUG);
-        $conf->set('debug', 'all');
+        $conf->set('enable.auto.commit', 'false');
+        $conf->set('auto.commit.interval.ms', 9999999);
+        $conf->set('auto.offset.reset', 'latest');
+        $conf->set("debug", 'consumer,topic,fetch');
 
         $consumer = new KafkaConsumer($conf);
-        $consumer->subscribe(['TaskLifeStyleVersion1']);
+        $consumer->subscribe(['BalanceUpdated']);
 
-//        $topic = $consumer->newTopic("TaskLifeStyleVersion1");
+        $consumer->newTopic("BalanceUpdated");
 
 
-       // while (true) {
-            $consumer->newTopic('TaskLifeStyleVersion1');
             $message = $consumer->consume(200);
 
             switch($message->err) {
@@ -55,27 +53,23 @@ class TaskCreated implements ShouldQueue
 
                 $json = json_decode($message->payload);
 
-                DB::table('task')
-                ->insert([
-                    'name' => $json->name,
-                    'description' => $json->description,
-                    'price' => $json->price,
-                    'userId' => $json->userId,
-                ]);
-
-               $consumer->commit($message);
+                DB::table('balance')
+                        ->where('userId', '=', $json->userId)
+                        ->update(['balance' => $json->balance]);
+               $consumer->commit();
                     //  dd($topic);
                 break;
                 case RD_KAFKA_RESP_ERR__PARTITION_EOF:
-//                    $consumer->close();
+                    $consumer->close();
                     // Не ошибка, просто достигнут конец очереди
                 break;
                 default:
-                    error_log("Error consuming message TaskCreated: " . $message->errstr() . "\n");
+                    error_log("Error consuming message BalanceUpdate: " . $message->errstr() . "\n");
+
                     // Здесь можно добавить обработку ошибок, например, запись в лог
                     echo "Error consuming message: " . $message->errstr() . "\n";
                 break;
             }
         }
-    //}
+   // }
 }

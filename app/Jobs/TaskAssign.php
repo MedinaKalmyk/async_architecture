@@ -17,7 +17,7 @@ use RdKafka\KafkaConsumer;
 use RdKafka\TopicConf;
 use Symfony\Component\HttpKernel\Log\Logger;
 
-class TaskCreated implements ShouldQueue
+class TaskAssign implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -40,13 +40,12 @@ class TaskCreated implements ShouldQueue
         $conf->set('debug', 'all');
 
         $consumer = new KafkaConsumer($conf);
-        $consumer->subscribe(['TaskLifeStyleVersion1']);
+        $consumer->subscribe(['ReAssignTasks']);
 
 //        $topic = $consumer->newTopic("TaskLifeStyleVersion1");
 
-
-       // while (true) {
-            $consumer->newTopic('TaskLifeStyleVersion1');
+        while (true) {
+            $consumer->newTopic('ReAssignTasks');
             $message = $consumer->consume(200);
 
             switch($message->err) {
@@ -55,16 +54,14 @@ class TaskCreated implements ShouldQueue
 
                 $json = json_decode($message->payload);
 
-                DB::table('task')
-                ->insert([
-                    'name' => $json->name,
-                    'description' => $json->description,
-                    'price' => $json->price,
-                    'userId' => $json->userId,
-                ]);
+                foreach ($json->tasks as $task) {
+                    DB::table('task')
+                        ->where('public_task_id', '=', $json->tasks->public_task_id)
+                        ->update(['userId' => array_rand($json->userId, 1)]);
+                    $consumer->commit();
+                }
 
                $consumer->commit($message);
-                    //  dd($topic);
                 break;
                 case RD_KAFKA_RESP_ERR__PARTITION_EOF:
 //                    $consumer->close();
@@ -77,5 +74,5 @@ class TaskCreated implements ShouldQueue
                 break;
             }
         }
-    //}
+    }
 }

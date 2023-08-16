@@ -1,0 +1,38 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Task.Created.v1",
+    "description": "json schema for CUD task events(version 1)",
+    "definitions": {
+        "event_data" : {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "string"
+                },
+                "userId" : {
+                    "type": "string"
+                }
+            },
+            "required": ["name"]
+        }
+    },
+    "type": "object",
+    "properties": {
+        "event_id": {
+            "type": "string"
+        },
+        "event_version": {
+            "enum": [1]
+        },
+        "event_name": {
+            "enum": ["TaskCreated"]
+        }
+    }
+}
+

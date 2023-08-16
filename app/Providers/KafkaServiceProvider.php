@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Jobs\TaskCreated;
+use App\Jobs\TaskCreated_Version1;
 use App\Kafka\KafkaConnector;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Contracts\Foundation\Application;

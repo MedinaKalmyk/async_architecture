@@ -17,7 +17,7 @@ use RdKafka\KafkaConsumer;
 use RdKafka\TopicConf;
 use Symfony\Component\HttpKernel\Log\Logger;
 
-class TaskCreated implements ShouldQueue
+class TaskStatusUpdate implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -31,23 +31,32 @@ class TaskCreated implements ShouldQueue
     public function handle() {
 
         $conf = new Conf();
-        $conf->set('group.id', 'mygroup');
-        $conf->set("bootstrap.servers", 'kafka:19092');
-        $conf->set('metadata.broker.list', 'kafka:19092');
-        $conf->set('enable.partition.eof', 'true');
-        $conf->set('auto.offset.reset', 'earliest');
-        $conf->set('log_level', (string) LOG_DEBUG);
-        $conf->set('debug', 'all');
+        $conf->set('group.id', 'mygroup1');
+        $conf->set("bootstrap.servers", 'kafka:19092, kafka1:19092');
+        $conf->set('metadata.broker.list', 'kafka:19092, kafka1:19092');
+//        $conf->set('enable.auto.commit', 'false');
+//        $conf->set('auto.commit.interval.ms', 9999999);
+//        $conf->set('auto.offset.reset', 'latest');
+//        $conf->set("auto.commit.interval.ms", 1e3);
+//        $conf->set("statistics.interval.ms", 5000);
+        $conf->set("debug", 'consumer,topic,fetch');
+//        $conf->set("enable.partition.eof", 'true');
+//        $conf->set("max.partition.fetch.bytes", 10240000);
 
         $consumer = new KafkaConsumer($conf);
-        $consumer->subscribe(['TaskLifeStyleVersion1']);
-
-//        $topic = $consumer->newTopic("TaskLifeStyleVersion1");
+        $consumer->subscribe(['TaskDone']);
 
 
        // while (true) {
-            $consumer->newTopic('TaskLifeStyleVersion1');
-            $message = $consumer->consume(200);
+            $consumer->newTopic('TaskDone');
+            $consumer->subscribe(["TaskDone"]);
+            $message = $consumer->consume(2000);
+
+            $consumer->unsubscribe();
+
+
+            dd($message);
+
 
             switch($message->err) {
 
@@ -55,19 +64,17 @@ class TaskCreated implements ShouldQueue
 
                 $json = json_decode($message->payload);
 
-                DB::table('task')
-                ->insert([
-                    'name' => $json->name,
-                    'description' => $json->description,
-                    'price' => $json->price,
-                    'userId' => $json->userId,
-                ]);
+                    DB::table('task')
+                        ->where('id', '=', $json->taskId)
+                        ->update(['status' => 'done']);
 
-               $consumer->commit($message);
+               $consumer->commit();
                     //  dd($topic);
                 break;
                 case RD_KAFKA_RESP_ERR__PARTITION_EOF:
-//                    $consumer->close();
+                    echo "Close";
+
+                    $consumer->close();
                     // Не ошибка, просто достигнут конец очереди
                 break;
                 default:
@@ -77,5 +84,5 @@ class TaskCreated implements ShouldQueue
                 break;
             }
         }
-    //}
+   // }
 }

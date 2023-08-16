@@ -48,6 +48,26 @@ $router->group(['middleware' => 'test'], function () use ($router) {
         Route::get('getTasks', 'getTasks');
 
     });
+
+    Route::controller(AuthController::class)->group(function () {
+        Route::get('getBalance', 'getBalance');
+
+    });
+
+    Route::controller(AuthController::class)->group(function () {
+        Route::post('taskDone', 'taskDone');
+
+    });
+
+    Route::controller(AuthController::class)->group(function () {
+        Route::get('getTransactions', 'getTransactions');
+
+    });
+
+    Route::controller(AuthController::class)->group(function () {
+        Route::post('reAssignAllTask', 'reAssignAllTask');
+
+    });
 });
 
 
