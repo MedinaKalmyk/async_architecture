@@ -164,43 +164,33 @@ class AuthController extends Controller
             );
 
             if($validator->isValid()) {
-                $conf = new Conf();;
+
+                $conf = new Conf();
                 $conf->set("bootstrap.servers", 'kafka:19092');
                 $conf->set('metadata.broker.list', 'kafka:19092');
-                $conf->set('api.version.request', 'false');
 
-                $producer = new Producer($conf);
-
-                $tc = new TopicConf();
-
-                $topicConf = new \RdKafka\TopicConf();
-                $topicConf->set('message.timeout.ms', (string) 30000);
-                $topicConf->set('request.required.acks', (string) -1);
-                $topicConf->set('request.timeout.ms', (string) 5000);
-
-                $topic = $producer->newTopic("TaskLifeStyleVersion1",  $topicConf);
-
+                $producer = new \RdKafka\Producer($conf);
                 $json = json_encode($data);
+                $topic = $producer->newTopic("TaskLifeStyleVersion1");
 
-                for ($i = 0; $i < 1000; $i++) {
-                    $key = $i % 10;
-                    $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json, (string) $key);
+                for ($i = 0; $i < 100; $i++) {
+                    $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
 
-                    // trigger callback queues
-                    $producer->poll(1);
+                }
+                $producer->poll(0);
+
+                for ($flushRetries = 0; $flushRetries < 100; $flushRetries++) {
+                    $result = $producer->flush(200);
+
+                    if (RD_KAFKA_RESP_ERR_NO_ERROR === $result) {
+                        TaskCreated::dispatchSync();
+                        break;
+                    }
                 }
 
-                $producer->flush(5000);
-
-                TaskCreated::dispatchSync();
-
-                $this->updateBalance($object->userId, $object->price);
-
-                echo "Message published\n";
-
-                return response()->json([
-                    'status' => 'success',
-                ]);
+                if (RD_KAFKA_RESP_ERR_NO_ERROR !== $result) {
+                    throw new \RuntimeException('Was unable to flush, messages might be lost!');
+                }
 
 
             } else {
@@ -235,33 +225,32 @@ class AuthController extends Controller
             );
 
             if($validator->isValid()) {
-                $conf = new Conf();;
+                $conf = new Conf();
                 $conf->set("bootstrap.servers", 'kafka:19092');
                 $conf->set('metadata.broker.list', 'kafka:19092');
-                $conf->set('api.version.request', 'false');
 
-                $producer = new Producer($conf);
-
-                $tc = new TopicConf();
-
+                $producer = new \RdKafka\Producer($conf);
+                $json = json_encode($data);
                 $topic = $producer->newTopic("TaskLifeStyleVersion2");
 
-                $json = json_encode($data);
+                for ($i = 0; $i < 100; $i++) {
+                    $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
 
-                $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
+                }
+                $producer->poll(0);
 
-                $producer->flush(2000);
+                for ($flushRetries = 0; $flushRetries < 100; $flushRetries++) {
+                    $result = $producer->flush(200);
 
-                TaskCreated_Version1::dispatchSync();
-//                TaskCreated_Version1::dispatch()->onQueue('default');
-                    $this->updateBalance($object->userId, $object->price);
+                    if (RD_KAFKA_RESP_ERR_NO_ERROR === $result) {
+                        TaskCreated_Version1::dispatchSync();
+                        break;
+                    }
+                }
 
-                echo "Message published\n";
-
-                return response()->json([
-                    'status' => 'success',
-                ]);
-
+                if (RD_KAFKA_RESP_ERR_NO_ERROR !== $result) {
+                    throw new \RuntimeException('Was unable to flush, messages might be lost!');
+                }
 
             } else {
                 echo "JSON does not validate. Violations:\n";
@@ -272,48 +261,6 @@ class AuthController extends Controller
 
         }
         return false;
-    }
-
-    public function updateBalance($userId, $taskPrice)
-    {
-        $balance = DB::table('balance')
-            ->where('userId','=', $userId)
-            ->get('balance')
-            ->first();
-
-        $data = [
-            'event_id' => (string)rand(),
-            'event_version' => 1,
-            'balance' => ($balance->balance) - $taskPrice,
-            'transaction' => "- $taskPrice",
-            'userId' => $userId
-        ];
-
-        $conf = new Conf();;
-        $conf->set("bootstrap.servers", 'kafka:19092');
-        $conf->set('metadata.broker.list', 'kafka:19092');
-        $conf->set('api.version.request', 'false');
-
-        $producer = new Producer($conf);
-
-        $topic = $producer->newTopic("BalanceUpdated");
-
-
-        $json = json_encode($data);
-
-
-        $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
-
-        $producer->flush(2000);
-
-        BalanceUpdated::dispatchSync();
-
-        echo "Message published\n";
-
-        return response()->json([
-            'status' => 'success',
-        ]);
-
     }
 
     public function getTasks(Request $request)
@@ -388,37 +335,28 @@ class AuthController extends Controller
         $conf->set("bootstrap.servers", 'kafka:19092');
         $conf->set('metadata.broker.list', 'kafka:19092');
 
-
-        $producer = new Producer($conf);
-
+        $producer = new \RdKafka\Producer($conf);
+        $json = json_encode($data);
         $topic = $producer->newTopic("TaskDone");
 
+        for ($i = 0; $i < 100; $i++) {
+            $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
 
-        $json = json_encode($data);
+        }
+        $producer->poll(0);
 
+        for ($flushRetries = 0; $flushRetries < 100; $flushRetries++) {
+            $result = $producer->flush(200);
 
-        $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
+            if (RD_KAFKA_RESP_ERR_NO_ERROR === $result) {
+                TaskStatusUpdate::dispatchSync();
+                break;
+            }
+        }
 
-        $producer->flush(5000);
-
-
-        TaskStatusUpdate::dispatchSync();
-
-
-        $topic = $producer->newTopic("BalanceUpdated");
-
-
-        $json = json_encode($data);
-
-
-        $topic->produce(RD_KAFKA_PARTITION_UA, 0, $json);
-
-        $producer->flush(2000);
-
-
-        BalanceUpdated::dispatchSync();
-
-
+        if (RD_KAFKA_RESP_ERR_NO_ERROR !== $result) {
+            throw new \RuntimeException('Was unable to flush, messages might be lost!');
+        }
         return true;
 
     }
@@ -459,7 +397,6 @@ class AuthController extends Controller
             'tasks' => $tasks,
             'userId' => $id,
         ];
-       // $key = array_rand($id, 1);
 
         $conf = new Conf();;
         $conf->set("bootstrap.servers", 'kafka:19092');

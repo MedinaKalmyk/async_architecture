@@ -6,6 +6,7 @@ use App\Jobs\Accounting;
 use App\Jobs\BalanceUpdated;
 use App\Jobs\TaskCreated;
 use App\Jobs\TaskCreated_Version1;
+use App\Jobs\TaskStatusUpdate;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use Illuminate\Support\Facades\DB;
@@ -19,191 +20,256 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-
         $schedule->call(function () {
+            $conf = new \RdKafka\Conf();
 
-            $conf = new Conf();
-            $conf->set('group.id', 'mygroup1');
-            $conf->set("bootstrap.servers", 'kafka:19092');
-            $conf->set('metadata.broker.list', 'kafka:19092');
-            $conf->set('enable.auto.commit', 'false');
-            $conf->set('auto.commit.interval.ms', 9999999);
-            $conf->set('auto.offset.reset', 'latest');
-            $conf->set("debug", 'consumer,topic,fetch');
-            $consumer = new KafkaConsumer($conf);
-            $consumer->subscribe(['BalanceUpdated']);
-            $consumer->newTopic("BalanceUpdated");
-
-            while (true)
-            {
-                $message = $consumer->consume(200);
-
-                switch($message->err) {
-
-                    case RD_KAFKA_RESP_ERR_NO_ERROR:
-
-                        $json = json_decode($message->payload);
-
-                        DB::table('accounting')
-                            ->insert([
-                                'userId' => 1,
-                                'sum' => $json->transaction,
-                            ]);
-                        $consumer->commit();
-                        //  dd($topic);
+            $conf->setRebalanceCb(function (\RdKafka\KafkaConsumer $kafka, $err, array $partitions = null) {
+                switch ($err) {
+                    case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+                        echo "Assign: ";
+                        var_dump($partitions);
+                        $kafka->assign($partitions);
                     break;
-                    case RD_KAFKA_RESP_ERR__PARTITION_EOF:
-                        $consumer->close();
-                        // Не ошибка, просто достигнут конец очереди
+
+                    case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+                        echo "Revoke: ";
+                        var_dump($partitions);
+                        $kafka->assign(NULL);
                     break;
+
                     default:
-                        error_log("Error consuming message BalanceUpdate: " . $message->errstr() . "\n");
-
-                        // Здесь можно добавить обработку ошибок, например, запись в лог
-                        echo "Error consuming message: " . $message->errstr() . "\n";
-                    break;
+                        throw new \Exception($err);
                 }
-            }
+            });
 
-        })->everyMinute();
-
-        $schedule->call(function () {
-
-            $conf = new Conf();
-            $conf->set('group.id', 'mygroup1');
-            $conf->set("bootstrap.servers", 'kafka:19092');
-            $conf->set('metadata.broker.list', 'kafka:19092');
-            $conf->set('enable.auto.commit', 'false');
-            $conf->set('auto.commit.interval.ms', 9999999);
-            $conf->set('auto.offset.reset', 'latest');
-            $conf->set("debug", 'consumer,topic,fetch');
-            $consumer = new KafkaConsumer($conf);
-            $consumer->subscribe(['BalanceUpdated']);
-            $consumer->newTopic("BalanceUpdated");
-
-            while (true)
-            {
-                $message = $consumer->consume(200);
-
-                switch($message->err) {
-
-                    case RD_KAFKA_RESP_ERR_NO_ERROR:
-
-                        $json = json_decode($message->payload);
-
-                        DB::table('accounting')
-                            ->insert([
-                                'userId' => 1,
-                                'sum' => $json->transaction,
-                            ]);
-                        $consumer->commit();
-                        //  dd($topic);
-                    break;
-                    case RD_KAFKA_RESP_ERR__PARTITION_EOF:
-                        $consumer->close();
-                        // Не ошибка, просто достигнут конец очереди
-                    break;
-                    default:
-                        error_log("Error consuming message BalanceUpdate: " . $message->errstr() . "\n");
-
-                        // Здесь можно добавить обработку ошибок, например, запись в лог
-                        echo "Error consuming message: " . $message->errstr() . "\n";
-                    break;
-                }
-            }
-
-        })->everyMinute();
-
-        $schedule->call(function () {
-        $conf = new Conf();
-        $conf->set('group.id', 'mygroup1');
-        $conf->set("bootstrap.servers", 'kafka:19092');
-        $conf->set('metadata.broker.list', 'kafka:19092');
-        $conf->set('enable.auto.commit', 'false');
-        $conf->set('auto.commit.interval.ms', 9999999);
-        $conf->set('auto.offset.reset', 'latest');
-        $conf->set("debug", 'consumer,topic,fetch');
-
-        $consumer = new KafkaConsumer($conf);
-        $consumer->subscribe(['BalanceUpdated']);
-
-        $consumer->newTopic("BalanceUpdated");
-
-
-        $message = $consumer->consume(200);
-
-        switch($message->err) {
-
-            case RD_KAFKA_RESP_ERR_NO_ERROR:
-
-                $json = json_decode($message->payload);
-
-                DB::table('balance')
-                    ->where('userId', '=', $json->userId)
-                    ->update(['balance' => $json->balance]);
-                $consumer->commit();
-                //  dd($topic);
-            break;
-            case RD_KAFKA_RESP_ERR__PARTITION_EOF:
-                $consumer->close();
-                // Не ошибка, просто достигнут конец очереди
-            break;
-            default:
-                error_log("Error consuming message BalanceUpdate: " . $message->errstr() . "\n");
-
-                // Здесь можно добавить обработку ошибок, например, запись в лог
-                echo "Error consuming message: " . $message->errstr() . "\n";
-            break;
-        }
-    })->everyMinute();
-
-        $schedule->call(function () {
-            $conf = new Conf();
             $conf->set('group.id', 'mygroup');
-            $conf->set("bootstrap.servers", 'kafka:19092');
+
             $conf->set('metadata.broker.list', 'kafka:19092');
-            $conf->set('enable.partition.eof', 'true');
+
             $conf->set('auto.offset.reset', 'earliest');
-            $conf->set('log_level', (string) LOG_DEBUG);
-            $conf->set('debug', 'all');
 
-            $consumer = new KafkaConsumer($conf);
-            $consumer->subscribe(['ReAssignTasks']);
+            $consumer = new \RdKafka\KafkaConsumer($conf);
 
-//        $topic = $consumer->newTopic("TaskLifeStyleVersion1");
+            $consumer->subscribe(['TaskDone']);
 
-            while (true) {
-                $consumer->newTopic('ReAssignTasks');
-                $message = $consumer->consume(200);
+            echo "Waiting for partition assignment... (make take some time when\n";
+            echo "quickly re-joining the group after leaving it.)\n";
 
-                switch($message->err) {
-
+           // while (true) {
+                $message = $consumer->consume(120*1000);
+                switch ($message->err) {
                     case RD_KAFKA_RESP_ERR_NO_ERROR:
-
                         $json = json_decode($message->payload);
 
-                        foreach ($json->tasks as $task) {
-                            DB::table('task')
-                                ->where('id', '=', $task->id)
-                                ->update(['userId' => array_rand($json->userId, 1)]);
-                            $consumer->commit();
-                        }
+                        DB::table('balance')
+                            ->where('userId', '=', $json->userId)
+                            ->update(['balance' => $json->balance]);
 
                         $consumer->commit($message);
                     break;
                     case RD_KAFKA_RESP_ERR__PARTITION_EOF:
-//                    $consumer->close();
-                        // Не ошибка, просто достигнут конец очереди
+                        echo "No more messages; will wait for more\n";
+                    break;
+                    case RD_KAFKA_RESP_ERR__TIMED_OUT:
+                        echo "Timed out\n";
                     break;
                     default:
-                        error_log("Error consuming message TaskCreated: " . $message->errstr() . "\n");
-                        // Здесь можно добавить обработку ошибок, например, запись в лог
-                        echo "Error consuming message: " . $message->errstr() . "\n";
+                        throw new \Exception($message->errstr(), $message->err);
                     break;
-                }
-            }
+              //  }
 
-        })->everyMinute();
+            }})->everySecond();
+
+        $schedule->call(function () {
+            $conf = new \RdKafka\Conf();
+
+            $conf->setRebalanceCb(function (\RdKafka\KafkaConsumer $kafka, $err, array $partitions = null) {
+                switch ($err) {
+                    case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+                        echo "Assign: ";
+                        var_dump($partitions);
+                        $kafka->assign($partitions);
+                        return true;
+                    break;
+
+                    case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+                        echo "Revoke: ";
+                        var_dump($partitions);
+                        $kafka->assign(NULL);
+                        return true;
+                    break;
+
+                    default:
+                        throw new \Exception($err);
+                }
+            });
+
+            $conf->set('group.id', 'mygroup');
+
+            $conf->set('metadata.broker.list', 'kafka:19092');
+
+            $conf->set('auto.offset.reset', 'earliest');
+
+            $consumer = new \RdKafka\KafkaConsumer($conf);
+
+            $consumer->subscribe(['TaskLifeStyleVersion1']);
+
+            echo "Waiting for partition assignment... (make take some time when\n";
+            echo "quickly re-joining the group after leaving it.)\n";
+
+                $message = $consumer->consume(120*1000);
+                switch ($message->err) {
+                    case RD_KAFKA_RESP_ERR_NO_ERROR:
+                        $json = json_decode($message->payload);
+                        $balance = DB::table('balance')
+                            ->where('userId','=', $json->userId)
+                            ->get('balance')
+                            ->first();
+
+                        DB::table('balance')
+                            ->where('userId', '=', $json->userId)
+                            ->update(['balance' => ($balance->balance) - $json->price]);
+
+                        $consumer->commit($message);
+                    return true;
+                    case RD_KAFKA_RESP_ERR__PARTITION_EOF:
+                        echo "No more messages; will wait for more\n";
+                        return true;
+                    break;
+                    case RD_KAFKA_RESP_ERR__TIMED_OUT:
+                        echo "Timed out\n";
+                        return true;
+                    break;
+                    default:
+                        throw new \Exception($message->errstr(), $message->err);
+                    break;
+          //      }
+
+            }})->everyFiveSeconds();
+
+        $schedule->call(function () {
+            $conf = new \RdKafka\Conf();
+
+            $conf->setRebalanceCb(function (\RdKafka\KafkaConsumer $kafka, $err, array $partitions = null) {
+                switch ($err) {
+                    case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+                        echo "Assign: ";
+                        var_dump($partitions);
+                        $kafka->assign($partitions);
+                    break;
+
+                    case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+                        echo "Revoke: ";
+                        var_dump($partitions);
+                        $kafka->assign(NULL);
+                    break;
+
+                    default:
+                        throw new \Exception($err);
+                }
+            });
+
+            $conf->set('group.id', 'mygroup');
+
+            $conf->set('metadata.broker.list', 'kafka:19092');
+
+            $conf->set('auto.offset.reset', 'earliest');
+
+            $consumer = new \RdKafka\KafkaConsumer($conf);
+
+            $consumer->subscribe(['TaskDone']);
+
+            echo "Waiting for partition assignment... (make take some time when\n";
+            echo "quickly re-joining the group after leaving it.)\n";
+
+            // while (true) {
+            $message = $consumer->consume(120*1000);
+            switch ($message->err) {
+                case RD_KAFKA_RESP_ERR_NO_ERROR:
+                    $json = json_decode($message->payload);
+
+                    DB::table('accounting;')
+                        ->insert([
+                            'userId' => $json->userId,
+                            'sum' => "+  $json->price"
+                        ]);
+
+                    $consumer->commit($message);
+                break;
+                case RD_KAFKA_RESP_ERR__PARTITION_EOF:
+                    echo "No more messages; will wait for more\n";
+                break;
+                case RD_KAFKA_RESP_ERR__TIMED_OUT:
+                    echo "Timed out\n";
+                break;
+                default:
+                    throw new \Exception($message->errstr(), $message->err);
+                break;
+                //  }
+
+            }})->everySecond();
+
+        $schedule->call(function () {
+            $conf = new \RdKafka\Conf();
+
+            $conf->setRebalanceCb(function (\RdKafka\KafkaConsumer $kafka, $err, array $partitions = null) {
+                switch ($err) {
+                    case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+                        echo "Assign: ";
+                        var_dump($partitions);
+                        $kafka->assign($partitions);
+                    break;
+
+                    case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+                        echo "Revoke: ";
+                        var_dump($partitions);
+                        $kafka->assign(NULL);
+                    break;
+
+                    default:
+                        throw new \Exception($err);
+                }
+            });
+
+            $conf->set('group.id', 'mygroup');
+
+            $conf->set('metadata.broker.list', 'kafka:19092');
+
+            $conf->set('auto.offset.reset', 'earliest');
+
+            $consumer = new \RdKafka\KafkaConsumer($conf);
+
+            $consumer->subscribe(['TaskLifeStyleVersion1, TaskLifeStyleVersion2']);
+
+            echo "Waiting for partition assignment... (make take some time when\n";
+            echo "quickly re-joining the group after leaving it.)\n";
+
+            // while (true) {
+            $message = $consumer->consume(120*1000);
+            switch ($message->err) {
+                case RD_KAFKA_RESP_ERR_NO_ERROR:
+                    $json = json_decode($message->payload);
+
+                    DB::table('accounting;')
+                        ->insert([
+                            'userId' => $json->userId,
+                            'sum' => "-  $json->price"
+                        ]);
+
+                    $consumer->commit($message);
+                break;
+                case RD_KAFKA_RESP_ERR__PARTITION_EOF:
+                    echo "No more messages; will wait for more\n";
+                break;
+                case RD_KAFKA_RESP_ERR__TIMED_OUT:
+                    echo "Timed out\n";
+                break;
+                default:
+                    throw new \Exception($message->errstr(), $message->err);
+                break;
+                //  }
+
+            }})->everySecond();
 
     }
 
