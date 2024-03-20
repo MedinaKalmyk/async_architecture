@@ -57,7 +57,7 @@ services:
 
     postgres:
         image: postgres:15
-        container_name: postgres
+        container_name: postgres_course
         restart: always
         environment:
             POSTGRES_DB: '${DB_DATABASE}'
@@ -67,7 +67,7 @@ services:
             - 'sail-pgsql:/var/lib/postgresql/data'
             - './vendor/laravel/sail/database/pgsql/create-testing-database.sql:/docker-entrypoint-initdb.d/10-create-testing-database.sql'
         ports:
-            - '0.0.0.0:15432:5432' # Port 15433 for connecting from localhost using, for example, data-grip
+            - '0.0.0.0:15433:5432' # Port 15433 for connecting from localhost using, for example, data-grip
         networks:
             - travellist
 
